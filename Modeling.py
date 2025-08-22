@@ -10,20 +10,10 @@ import time
 import warnings
 warnings.filterwarnings('ignore')
 
-# Try to import AI libraries with graceful fallback
-try:
-    from diffusers import DiffusionPipeline
-    import torch
-    TORCH_AVAILABLE = True
-except ImportError:
-    TORCH_AVAILABLE = False
-    st.warning("Running in lightweight mode - AI image generation disabled due to missing dependencies")
-
-try:
-    from transformers import pipeline as hf_pipeline
-    TRANSFORMERS_AVAILABLE = True
-except ImportError:
-    TRANSFORMERS_AVAILABLE = False
+# Import AI libraries
+from diffusers import DiffusionPipeline
+from transformers import pipeline as hf_pipeline
+import torch
 
 df = pd.read_csv('pokemon_data_cleaned.csv')
 
@@ -146,34 +136,6 @@ def generate_pokemon_name(user_input, progress_callback=None):
     try:
         # Load text generation pipeline
         if 'text_generator' not in st.session_state:
-            if not TRANSFORMERS_AVAILABLE:
-                # Use fallback name generation
-                stat_prefixes = {
-                    'attack': ['Fury', 'Rage', 'Strike', 'Blade', 'Fang'],
-                    'defense': ['Shield', 'Guard', 'Armor', 'Wall', 'Stone'],
-                    'speed': ['Swift', 'Flash', 'Dash', 'Wind', 'Bolt'],
-                    'special-attack': ['Mystic', 'Flame', 'Spark', 'Wave', 'Aura'],
-                    'hp': ['Vital', 'Life', 'Heart', 'Soul', 'Power']
-                }
-                
-                stat_suffixes = ['mon', 'chu', 'eon', 'tal', 'wing', 'saur', 'rex']
-                
-                primary_stat_name = primary_stat[0]
-                if primary_stat_name in stat_prefixes:
-                    prefix = np.random.choice(stat_prefixes[primary_stat_name])
-                else:
-                    prefix = np.random.choice(['Nova', 'Cosmic', 'Star', 'Luna'])
-                
-                suffix = np.random.choice(stat_suffixes)
-                pokemon_name = prefix + suffix
-                
-                return {
-                    'name': pokemon_name,
-                    'type_suggestion': get_type_suggestion(user_input),
-                    'stats_summary': f"Specializes in {primary_stat[0].replace('-', ' ').title()}",
-                    'name_prompt': f"Procedural generation using {primary_stat[0]} stat (AI libraries not available)"
-                }
-            
             if progress_callback:
                 progress_callback(40, "Loading text generation model...")
             
@@ -182,41 +144,130 @@ def generate_pokemon_name(user_input, progress_callback=None):
                 "text-generation",
                 model="distilgpt2",
                 tokenizer="distilgpt2",
-                device=0 if TORCH_AVAILABLE and torch.cuda.is_available() else -1,
-                torch_dtype=torch.float16 if TORCH_AVAILABLE and torch.cuda.is_available() else torch.float32
+                device=0 if torch.cuda.is_available() else -1,
+                torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32
             )
         
         if progress_callback:
             progress_callback(60, "Generating name...")
         
-        # Create context for name generation
+        # Create context for name generation based on stats
         stat_description = f"high {primary_stat[0].replace('-', ' ')}" if primary_stat[1] > 100 else f"moderate {primary_stat[0].replace('-', ' ')}"
         
-        # Generate Pokemon name with improved prompting
+        # Generate Pokemon name using real Pokemon examples
         pokemon_name = "Mysterion"  # Default fallback
-        name_prompt = f"Create a Pokemon creature name that is {size_category} and {build_category}. Just the name, no extra text."
-            
-        name_result = st.session_state.text_generator(
-            name_prompt,
-            num_return_sequences=1,
-            temperature=0.7,
-            do_sample=True,
-            pad_token_id=st.session_state.text_generator.tokenizer.eos_token_id,
-            eos_token_id=st.session_state.text_generator.tokenizer.eos_token_id,
-            repetition_penalty=1.2
-        )
-            
-        generated_text = name_result[0]['generated_text']
-        st.write(generated_text)
-        name_part = generated_text.replace(name_prompt, "").strip()
-            
-        # Look for a good name in the generated text
-        words = name_part.split()
-        for word in words:
-            clean_name = ''.join(c for c in word if c.isalnum())
-            if clean_name and len(clean_name) >= 4 and len(clean_name) <= 12:
-                pokemon_name = clean_name.capitalize()
-                break
+        
+        # Create prompts that teach naming patterns without exact examples
+        base_prompts = []
+        
+        # Pattern-based prompts that teach structure without giving existing names
+        if primary_stat[0] == 'attack':
+            base_prompts = [
+                "Pokemon names for fierce fighters often combine power words with creature endings. Create a strong warrior Pokemon name using syllables like: Grav, Tor, Blas, Rend, Fang, Claw, Strike, ending with: -on, -ar, -ius, -gor, -rex:",
+                "Aggressive Pokemon names blend battle terms with mystical sounds. Combine combat syllables: Rage, Fury, Blade, Storm, Crush, with endings: -don, -mor, -tus, -dor, -ax. New fierce Pokemon:",
+                "Fighting Pokemon names merge strength concepts with creature sounds. Mix power syllables: Titan, Force, Might, Iron, Steel, with endings: -saur, -mon, -leon, -dra, -wing. Create one:"
+            ]
+        elif primary_stat[0] == 'defense':
+            base_prompts = [
+                "Defensive Pokemon names combine protection words with sturdy endings. Use shield syllables: Guard, Wall, Fort, Rock, Stone, Armor, with endings: -don, -tron, -ite, -rus, -gel. Create a defensive Pokemon:",
+                "Tank Pokemon names blend fortress concepts with solid sounds. Combine defense syllables: Shield, Barri, Plat, Bulwark, Rampart, with endings: -eon, -tos, -dur, -rix, -gon. New armored Pokemon:",
+                "Sturdy Pokemon names merge protection terms with earth sounds. Mix defensive syllables: Bastion, Aegis, Ward, Shelter, with endings: -stone, -guard, -dge, -fort, -wall. Create one:"
+            ]
+        elif primary_stat[0] == 'speed':
+            base_prompts = [
+                "Fast Pokemon names combine velocity words with swift endings. Use speed syllables: Bolt, Flash, Dash, Swift, Quick, Zip, with endings: -ra, -el, -ion, -eon, -ar. Create a speedy Pokemon:",
+                "Lightning Pokemon names blend electricity terms with rapid sounds. Combine electric syllables: Volt, Spark, Thunder, Storm, Zap, with endings: -tric, -shock, -wing, -tail, -strike. New quick Pokemon:",
+                "Swift Pokemon names merge wind concepts with agile sounds. Mix air syllables: Gale, Breeze, Whirl, Cyclone, Tempest, with endings: -dor, -ane, -flow, -drift, -gust. Create one:"
+            ]
+        elif primary_stat[0] == 'special-attack':
+            base_prompts = [
+                "Magical Pokemon names combine mystical words with arcane endings. Use magic syllables: Mystic, Aura, Spell, Cosmic, Astral, with endings: -mage, -caster, -weaver, -sage, -lore. Create a mystical Pokemon:",
+                "Psychic Pokemon names blend mind terms with ethereal sounds. Combine mental syllables: Psyche, Mind, Soul, Spirit, Dream, with endings: -kinetic, -path, -vision, -sense, -wave. New psychic Pokemon:",
+                "Elemental Pokemon names merge energy concepts with power sounds. Mix elemental syllables: Pyro, Hydro, Electro, Terra, Aero, with endings: -blast, -surge, -nova, -flux, -storm. Create one:"
+            ]
+        else:  # hp or balanced
+            base_prompts = [
+                "Hardy Pokemon names combine endurance words with vital endings. Use life syllables: Vita, Heal, Life, Heart, Soul, with endings: -cure, -mend, -bloom, -pulse, -beat. Create a hardy Pokemon:",
+                "Balanced Pokemon names blend harmony terms with stable sounds. Combine balance syllables: Equi, Harmon, Balance, Steady, Center, with endings: -poise, -calm, -zen, -peace, -flow. New reliable Pokemon:",
+                "Classic Pokemon names merge traditional concepts with timeless sounds. Mix classic syllables: Noble, Royal, Ancient, Wise, Elder, with endings: -crown, -throne, -sage, -lord, -master. Create one:"
+            ]
+        
+        # Size-based pattern prompts
+        if size_category == "mega":
+            base_prompts.append("Giant Pokemon names combine massive concepts with colossal endings. Use size syllables: Mega, Gigan, Titan, Colos, Macro, with endings: -tus, -don, -rex, -max, -giant. Create a giant Pokemon:")
+        elif size_category == "mini":
+            base_prompts.append("Small Pokemon names combine tiny concepts with cute endings. Use mini syllables: Micro, Tiny, Peti, Mini, Pixie, with endings: -ling, -pip, -bit, -mite, -dot. Create a small Pokemon:")
+        
+        # Pattern-based general prompts
+        base_prompts.extend([
+            "Pokemon names follow patterns: nature syllables + creature endings. Combine: Flor, Aqua, Igni, Terr, Glaci, with: -mon, -saur, -chu, -eon, -tal. Create a new Pokemon:",
+            "Legendary Pokemon names use majestic syllables + divine endings. Mix: Celest, Eternal, Infinity, Cosmos, Divine, with: -eus, -arceus, -gon, -ios, -ias. Create a legendary Pokemon:"
+        ])
+        
+        # Try each prompt to generate a creative name
+        for base_prompt in base_prompts:
+            try:
+                name_result = st.session_state.text_generator(
+                    base_prompt,
+                    max_new_tokens=6,  # Allow a bit more for syllable combinations
+                    num_return_sequences=1,
+                    temperature=0.9,  # Higher creativity since we're not copying examples
+                    do_sample=True,
+                    pad_token_id=st.session_state.text_generator.tokenizer.eos_token_id,
+                    eos_token_id=st.session_state.text_generator.tokenizer.eos_token_id,
+                    repetition_penalty=1.5,  # Higher penalty to avoid repetition
+                    top_p=0.85,  # Slightly more focused sampling
+                    top_k=40   # Limit vocabulary for better results
+                )
+                
+                generated_text = name_result[0]['generated_text']
+                # Extract the generated name after the prompt
+                generated_part = generated_text.replace(base_prompt, "").strip()
+                
+                # Look for a good Pokemon name in the generated text
+                if generated_part:
+                    # Split by common separators and clean
+                    potential_names = generated_part.replace(",", " ").replace(".", " ").replace("!", " ").replace("?", " ").replace(":", " ").replace(";", " ").split()
+                    
+                    for potential_name in potential_names:
+                        # Clean the name - remove any non-alphanumeric characters
+                        clean_name = ''.join(c for c in potential_name if c.isalnum())
+                        
+                        # Enhanced filtering for Pokemon-like names - now includes existing Pokemon names to avoid
+                        excluded_words = {
+                            'pokemon', 'name', 'new', 'another', 'the', 'and', 'like', 'are', 'a', 'an', 'is', 'it', 'this', 'that',
+                            'similar', 'powerful', 'strong', 'fast', 'quick', 'big', 'small', 'giant', 'tiny', 'fierce', 'cool',
+                            'awesome', 'great', 'good', 'best', 'legendary', 'rare', 'special', 'magical', 'mystical', 'epic',
+                            'super', 'mega', 'ultra', 'hyper', 'master', 'king', 'queen', 'lord', 'god', 'beast', 'monster',
+                            'creature', 'animal', 'fire', 'water', 'grass', 'electric', 'psychic', 'fighting', 'poison',
+                            'ground', 'flying', 'bug', 'rock', 'ghost', 'dragon', 'dark', 'steel', 'fairy', 'normal',
+                            'type', 'types', 'generation', 'gen', 'game', 'games', 'series', 'show', 'anime', 'manga',
+                            'xfinity', 'comcast', 'netflix', 'google', 'amazon', 'apple', 'microsoft', 'facebook', 'twitter',
+                            # Add common existing Pokemon names to avoid
+                            'pikachu', 'charizard', 'blastoise', 'venusaur', 'alakazam', 'machamp', 'gengar', 'dragonite',
+                            'mewtwo', 'mew', 'lugia', 'rayquaza', 'dialga', 'palkia', 'arceus', 'garchomp', 'lucario',
+                            'gyarados', 'tyranitar', 'salamence', 'metagross', 'aggron', 'steelix', 'electrode', 'rapidash',
+                            'create', 'combine', 'mix', 'use', 'blend', 'merge', 'syllables', 'endings', 'concepts', 'terms',
+                            'words', 'sounds', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'
+                        }
+                        
+                        # Check if it's a good Pokemon name
+                        if (clean_name and 
+                            len(clean_name) >= 5 and 
+                            len(clean_name) <= 12 and
+                            clean_name.lower() not in excluded_words and
+                            not clean_name.lower().startswith(('http', 'www', 'com', 'org', 'net')) and
+                            not clean_name.isdigit() and
+                            clean_name.isalpha() and  # Only letters, no numbers or symbols
+                            not any(existing in clean_name.lower() for existing in ['pikachu', 'charizard', 'blastoise', 'venusaur'])):  # Extra check for partial matches
+                            pokemon_name = clean_name.capitalize()
+                            break
+                    
+                    if pokemon_name != "Mysterion":
+                        break
+                        
+            except Exception as e:
+                continue
         
         # If AI generation failed completely, create name based on stats
         if pokemon_name == "Mysterion":
@@ -237,9 +288,10 @@ def generate_pokemon_name(user_input, progress_callback=None):
                 prefix = np.random.choice(['Nova', 'Cosmic', 'Star', 'Luna'])
             
             suffix = np.random.choice(stat_suffixes)
-            pokemon_name = prefix + suffix
+            
+        # Update the name prompt description
+        name_prompt = f"AI generation using examples from {primary_stat[0]} Pokemon with {size_category} build characteristics"
 
-        
         return {
             'name': pokemon_name,
             'type_suggestion': get_type_suggestion(user_input),
@@ -248,10 +300,31 @@ def generate_pokemon_name(user_input, progress_callback=None):
         }
         
     except Exception as e:
+        # Fallback name generation
+        stat_prefixes = {
+            'attack': ['Fury', 'Rage', 'Strike', 'Blade', 'Fang'],
+            'defense': ['Shield', 'Guard', 'Armor', 'Wall', 'Stone'],
+            'speed': ['Swift', 'Flash', 'Dash', 'Wind', 'Bolt'],
+            'special-attack': ['Mystic', 'Flame', 'Spark', 'Wave', 'Aura'],
+            'hp': ['Vital', 'Life', 'Heart', 'Soul', 'Power']
+        }
+        
+        stat_suffixes = ['mon', 'chu', 'eon', 'tal', 'wing', 'saur', 'rex']
+        
+        primary_stat_name = primary_stat[0]
+        if primary_stat_name in stat_prefixes:
+            prefix = np.random.choice(stat_prefixes[primary_stat_name])
+        else:
+            prefix = np.random.choice(['Nova', 'Cosmic', 'Star', 'Luna'])
+        
+        suffix = np.random.choice(stat_suffixes)
+        pokemon_name = prefix + suffix
+        
         return {
-            'name': 'Mysterion',
-            'type_suggestion': 'Normal',
-            'stats_summary': 'Balanced fighter',
+            'name': pokemon_name,
+            'type_suggestion': get_type_suggestion(user_input),
+            'stats_summary': f"Specializes in {primary_stat[0].replace('-', ' ').title()}",
+            'name_prompt': f"Fallback: Procedural generation using {primary_stat[0]} stat",
             'error': str(e)
         }
 
@@ -291,9 +364,6 @@ def get_type_suggestion(user_input):
 
 def generate_pokemon_image_free(user_input, progress_callback=None):
     """Generate a Pokemon image using free Hugging Face Stable Diffusion"""
-    
-    if not TORCH_AVAILABLE:
-        return None, "🚫 AI image generation not available - missing PyTorch/Diffusers. Install with: pip install torch diffusers"
     
     # Get the final values (user input or predictions)
     height = user_input.get('height', 0)
@@ -520,7 +590,7 @@ with tab1:
     with col_input:
         st.subheader("Input Features")
         
-        # First, collect all user inputs
+        # Collect all user inputs and show validation warnings immediately after each input
         for feature in features:
             value = st.number_input(
                 f"Enter {feature.replace('-', ' ').title()}:",
@@ -529,14 +599,31 @@ with tab1:
                 key=f"input_{feature}",
                 help=f"Leave empty to see prediction for {feature}"
             )
-            if value is not None and predictions[feature]['lower'] < value < predictions[feature]['upper']:
+            if value is not None:
                 user_input[feature] = value
-            elif value is not None:
-                st.warning(f"**{feature.replace('-', ' ').replace('_', ' ').title()}**: {value:.1f} is outside the prediction interval!")
-
-    # Now get predictions based on all current inputs
+                
+                # Show validation warnings immediately after each input
+                # Basic sanity checks for obviously unrealistic values
+                if feature == 'height' and (value < 0.1 or value > 50):
+                    st.warning(f"Height: {value} seems unrealistic! Most Pokémon are between 0.1-50 meters tall.")
+                elif feature == 'weight' and (value < 0.1 or value > 10000):
+                    st.warning(f"Weight: {value} seems unrealistic! Most Pokémon weigh between 0.1-10,000 kg.")
+                elif feature == 'base_experience' and (value < 30 or value > 400):
+                    st.warning(f" Base Experience: {value} seems unrealistic! Most Pokémon have 30-400 base experience.")
+                elif feature in ['hp', 'attack', 'defense', 'special-attack', 'special-defense', 'speed'] and (value < 1 or value > 255):
+                    st.warning(f" {feature.replace('-', ' ').title()}: {value} seems unrealistic! Most Pokémon stats are between 1-255.")
+                
+                # Advanced ML-based validation (only if we have multiple inputs)
+                elif len(user_input) > 1:
+                    # Create temporary input without this feature to get its prediction interval
+                    temp_input = {k: v for k, v in user_input.items() if k != feature}
+                    if temp_input:  # Only if we have other inputs
+                        temp_predictions = predict_missing(temp_input, models)
+                        expected_range = temp_predictions[feature]
+                        if not (expected_range['lower'] <= value <= expected_range['upper']):
+                            st.warning(f"**{feature.replace('-', ' ').replace('_', ' ').title()}**: {value:.1f} is outside the expected range ({expected_range['lower']:.1f} - {expected_range['upper']:.1f}) based on your other inputs!")
+    
     predictions = predict_missing(user_input, models)
-
     with col_predictions:
         st.subheader("Live Predictions")
         
