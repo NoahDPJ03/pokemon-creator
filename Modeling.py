@@ -17,14 +17,13 @@ try:
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
-    st.warning("Running in lightweight mode - AI image generation disabled due to hosting constraints")
+    st.warning("Running in lightweight mode - AI image generation disabled due to missing dependencies")
 
 try:
     from transformers import pipeline as hf_pipeline
     TRANSFORMERS_AVAILABLE = True
 except ImportError:
     TRANSFORMERS_AVAILABLE = False
-
 
 df = pd.read_csv('pokemon_data_cleaned.csv')
 
@@ -99,93 +98,10 @@ def predict_missing(user_input, models):
 
     return predictions
 
-
-_NAME_RE = re.compile(r"^[A-Z][a-z]{3,11}$")
-
-def _llm_name(size_category: str, build_category: str) -> tuple[str | None, str]:
-    """Try to get a single clean name from a tiny LM. Returns (name, prompt)."""
-    if not TRANSFORMERS_AVAILABLE:
-        return None, "AI text generation not available in lightweight mode"
-    
-    if 'text_generator' not in st.session_state:
-        try:
-            st.session_state.text_generator = hf_pipeline(
-                "text-generation",
-                model="distilgpt2",
-                tokenizer="distilgpt2",
-                device=0 if TORCH_AVAILABLE and torch.cuda.is_available() else -1
-            )
-        except Exception as e:
-            return None, f"Error loading text model: {str(e)}"
-
-    # Few-shot-ish, with a strict pattern and an obvious stopping cue.
-    prompt = (
-        "Generate ONE Pokémon-style creature name.\n"
-        "Rules: 4-12 letters, alphabetic only, no spaces or punctuation.\n"
-        f"Traits: {size_category}, {build_category}.\n"
-        "Name: "
-    )
-
-    try:
-        outs = st.session_state.text_generator(
-            prompt,
-            max_new_tokens=6,              # keep it short
-            num_return_sequences=8,        # try a few
-            do_sample=True,
-            top_p=0.92,
-            top_k=50,
-            temperature=0.9,
-            repetition_penalty=1.1,
-            return_full_text=False         # **critical**: don't echo the prompt
-        )
-
-        # Extract first word-like token from each completion, filter strictly.
-        for o in outs:
-            text = o["generated_text"].strip()
-            # take the first alphabetic chunk
-            m = re.search(r"[A-Za-z]{4,12}", text)
-            if not m:
-                continue
-            candidate = m.group(0).capitalize()
-            if _NAME_RE.match(candidate):
-                return candidate, prompt
-        return None, prompt
-    except Exception as e:
-        return None, f"AI generation failed: {str(e)}"
-
-
-def _procedural_name(primary_stat: str) -> str:
-    """Deterministic, gamey fallback that always returns a decent name."""
-    rng = np.random.default_rng()
-    base = {
-        'attack':   ["Kr", "Zar", "Dr", "Rav", "Gor", "Blad", "Fang", "Brut"],
-        'defense':  ["Gran", "Bulw", "Aeg", "Bast", "For", "Rock", "Stal", "Ward"],
-        'speed':    ["Zy", "Velo", "Swift", "Skyr", "Dash", "Gale", "Volt", "Flux"],
-        'special-attack': ["My", "Pyro", "Aero", "Lum", "Volt", "Cryo", "Aqua", "Umbr"],
-        'hp':       ["Vita", "Endu", "Giga", "Mega", "Stout", "Hearty", "Soma", "Core"]
-    }.get(primary_stat, ["Neo", "Nova", "Terra", "Luma", "Astra", "Orbi", "Cosmo"])
-
-    mid = ["ra", "zu", "shi", "gon", "dra", "lix", "zor", "phy", "ri", "ka", "no", "ru"]
-    end = ["mon", "chu", "eon", "zor", "dile", "ling", "saur", "rex", "phox", "mite", "loon"]
-
-    parts = [rng.choice(base), rng.choice(mid)]
-    if rng.random() < 0.6:  # 2–3 syllables
-        parts.append(rng.choice(mid))
-    parts.append(rng.choice(end))
-
-    name = "".join(parts).capitalize()
-    # trim if somehow longer than 12 letters, retry once
-    if len(name) > 12:
-        name = (name[:12]).rstrip().capitalize()
-    if not _NAME_RE.match(name):
-        name = (rng.choice(base) + rng.choice(end)).capitalize()
-        name = name[:12]
-    return name
-
-
 def generate_pokemon_name(user_input, progress_callback=None):
-    """Generate a Pokemon name based on stats using AI text generation (fixed)."""
-
+    """Generate a Pokemon name based on stats using AI text generation"""
+    
+    # Get the final values (user input or predictions)
     height = user_input.get('height', 0)
     weight = user_input.get('weight', 0)
     hp = user_input.get('hp', 0)
@@ -194,47 +110,148 @@ def generate_pokemon_name(user_input, progress_callback=None):
     special_attack = user_input.get('special-attack', 0)
     special_defense = user_input.get('special-defense', 0)
     speed = user_input.get('speed', 0)
-
-    if progress_callback: progress_callback(10, "Analyzing stats for name generation...")
-
+    base_experience = user_input.get('base_experience', 0)
+    
+    if progress_callback:
+        progress_callback(10, "Analyzing stats for name generation...")
+    
+    # Determine Pokemon characteristics for naming
     primary_stat = max([
         ('attack', attack), ('defense', defense), ('speed', speed),
         ('special-attack', special_attack), ('hp', hp)
     ], key=lambda x: x[1])
-
-    # size/build buckets
-    if height > 15:   size_category = "mega"
-    elif height > 10: size_category = "titan"
-    elif height > 5:  size_category = "normal"
-    else:             size_category = "mini"
-
-    ratio = weight / max(height, 1)
-    build_category = "heavy" if ratio > 30 else ("balanced" if ratio > 15 else "light")
-
-    if progress_callback: progress_callback(30, "Creating Pokémon name...")
-
+    
+    # Size categories for naming
+    if height > 15:
+        size_category = "mega"
+    elif height > 10:
+        size_category = "titan"
+    elif height > 5:
+        size_category = "normal"
+    else:
+        size_category = "mini"
+    
+    # Weight categories
+    weight_height_ratio = weight / max(height, 1)
+    if weight_height_ratio > 30:
+        build_category = "heavy"
+    elif weight_height_ratio > 15:
+        build_category = "balanced"
+    else:
+        build_category = "light"
+    
+    if progress_callback:
+        progress_callback(30, "Creating Pokemon name...")
+    
     try:
-        if progress_callback: progress_callback(60, "Sampling candidates...")
-        name, name_prompt = _llm_name(size_category, build_category)
+        # Load text generation pipeline
+        if 'text_generator' not in st.session_state:
+            if not TRANSFORMERS_AVAILABLE:
+                # Use fallback name generation
+                stat_prefixes = {
+                    'attack': ['Fury', 'Rage', 'Strike', 'Blade', 'Fang'],
+                    'defense': ['Shield', 'Guard', 'Armor', 'Wall', 'Stone'],
+                    'speed': ['Swift', 'Flash', 'Dash', 'Wind', 'Bolt'],
+                    'special-attack': ['Mystic', 'Flame', 'Spark', 'Wave', 'Aura'],
+                    'hp': ['Vital', 'Life', 'Heart', 'Soul', 'Power']
+                }
+                
+                stat_suffixes = ['mon', 'chu', 'eon', 'tal', 'wing', 'saur', 'rex']
+                
+                primary_stat_name = primary_stat[0]
+                if primary_stat_name in stat_prefixes:
+                    prefix = np.random.choice(stat_prefixes[primary_stat_name])
+                else:
+                    prefix = np.random.choice(['Nova', 'Cosmic', 'Star', 'Luna'])
+                
+                suffix = np.random.choice(stat_suffixes)
+                pokemon_name = prefix + suffix
+                
+                return {
+                    'name': pokemon_name,
+                    'type_suggestion': get_type_suggestion(user_input),
+                    'stats_summary': f"Specializes in {primary_stat[0].replace('-', ' ').title()}",
+                    'name_prompt': f"Procedural generation using {primary_stat[0]} stat (AI libraries not available)"
+                }
+            
+            if progress_callback:
+                progress_callback(40, "Loading text generation model...")
+            
+            # Use a smaller, faster model for text generation
+            st.session_state.text_generator = hf_pipeline(
+                "text-generation",
+                model="distilgpt2",
+                tokenizer="distilgpt2",
+                device=0 if TORCH_AVAILABLE and torch.cuda.is_available() else -1,
+                torch_dtype=torch.float16 if TORCH_AVAILABLE and torch.cuda.is_available() else torch.float32
+            )
+        
+        if progress_callback:
+            progress_callback(60, "Generating name...")
+        
+        # Create context for name generation
+        stat_description = f"high {primary_stat[0].replace('-', ' ')}" if primary_stat[1] > 100 else f"moderate {primary_stat[0].replace('-', ' ')}"
+        
+        # Generate Pokemon name with improved prompting
+        pokemon_name = "Mysterion"  # Default fallback
+        name_prompt = f"Create a Pokemon creature name that is {size_category} and {build_category}. Just the name, no extra text."
+            
+        name_result = st.session_state.text_generator(
+            name_prompt,
+            num_return_sequences=1,
+            temperature=0.7,
+            do_sample=True,
+            pad_token_id=st.session_state.text_generator.tokenizer.eos_token_id,
+            eos_token_id=st.session_state.text_generator.tokenizer.eos_token_id,
+            repetition_penalty=1.2
+        )
+            
+        generated_text = name_result[0]['generated_text']
+        st.write(generated_text)
+        name_part = generated_text.replace(name_prompt, "").strip()
+            
+        # Look for a good name in the generated text
+        words = name_part.split()
+        for word in words:
+            clean_name = ''.join(c for c in word if c.isalnum())
+            if clean_name and len(clean_name) >= 4 and len(clean_name) <= 12:
+                pokemon_name = clean_name.capitalize()
+                break
+        
+        # If AI generation failed completely, create name based on stats
+        if pokemon_name == "Mysterion":
+            stat_prefixes = {
+                'attack': ['Fury', 'Rage', 'Strike', 'Blade', 'Fang'],
+                'defense': ['Shield', 'Guard', 'Armor', 'Wall', 'Stone'],
+                'speed': ['Swift', 'Flash', 'Dash', 'Wind', 'Bolt'],
+                'special-attack': ['Mystic', 'Flame', 'Spark', 'Wave', 'Aura'],
+                'hp': ['Vital', 'Life', 'Heart', 'Soul', 'Power']
+            }
+            
+            stat_suffixes = ['mon', 'chu', 'eon', 'tal', 'wing', 'saur', 'rex']
+            
+            primary_stat_name = primary_stat[0]
+            if primary_stat_name in stat_prefixes:
+                prefix = np.random.choice(stat_prefixes[primary_stat_name])
+            else:
+                prefix = np.random.choice(['Nova', 'Cosmic', 'Star', 'Luna'])
+            
+            suffix = np.random.choice(stat_suffixes)
+            pokemon_name = prefix + suffix
 
-        if not name:
-            # fallback that always returns something decent
-            name = _procedural_name(primary_stat[0])
-            name_prompt = f"Fallback: Procedural generation using {primary_stat[0]} stat with syllable patterns"
-
+        
         return {
-            'name': name,
+            'name': pokemon_name,
             'type_suggestion': get_type_suggestion(user_input),
             'stats_summary': f"Specializes in {primary_stat[0].replace('-', ' ').title()}",
             'name_prompt': name_prompt
         }
+        
     except Exception as e:
-        # last-ditch fallback
         return {
-            'name': _procedural_name(primary_stat[0]),
+            'name': 'Mysterion',
             'type_suggestion': 'Normal',
             'stats_summary': 'Balanced fighter',
-            'name_prompt': f"Error fallback: Procedural generation using {primary_stat[0]} stat",
             'error': str(e)
         }
 
@@ -439,49 +456,40 @@ def generate_pokemon_image_free(user_input, progress_callback=None):
             if progress_callback:
                 progress_callback(40, "Loading Stable Diffusion model (first time only)...")
             
-            try:
-                st.session_state.pokemon_pipeline = DiffusionPipeline.from_pretrained(
-                    "runwayml/stable-diffusion-v1-5",
-                    torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-                    use_safetensors=True
-                )
-                
-                # Move to GPU if available, otherwise CPU
-                if torch.cuda.is_available():
-                    st.session_state.pokemon_pipeline = st.session_state.pokemon_pipeline.to("cuda")
-            except Exception as e:
-                return None, f"Failed to load Stable Diffusion model: {str(e)}. This may be due to memory constraints on free hosting."
+            st.session_state.pokemon_pipeline = DiffusionPipeline.from_pretrained(
+                "runwayml/stable-diffusion-v1-5",
+                torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+                use_safetensors=True
+            )
+            
+            
+            # Move to GPU if available, otherwise CPU
+            if torch.cuda.is_available():
+                st.session_state.pokemon_pipeline = st.session_state.pokemon_pipeline.to("cuda")
         
         if progress_callback:
             progress_callback(70, "Generating your Pokémon...")
         
-        # Generate image with memory-conscious settings
-        try:
-            with torch.inference_mode():
-                result = st.session_state.pokemon_pipeline(
-                    prompt,
-                    num_inference_steps=20,  # Reduced for memory efficiency
-                    guidance_scale=7.5,     # Slightly reduced 
-                    height=512,
-                    width=512
-                )
-            
-            if progress_callback:
-                progress_callback(95, "Finalizing image...")
-            
-            image = result.images[0]
-            return image, prompt
-        except torch.cuda.OutOfMemoryError:
-            # Clear GPU memory and try CPU
-            if hasattr(st.session_state, 'pokemon_pipeline'):
-                del st.session_state.pokemon_pipeline
-            torch.cuda.empty_cache()
-            return None, "GPU out of memory. Try running locally for AI image generation."
+        # Generate image
+        with torch.inference_mode():
+            result = st.session_state.pokemon_pipeline(
+                prompt,
+                num_inference_steps=25,  # More steps for better quality
+                guidance_scale=8.0,     # Stronger guidance for better adherence to prompt
+                height=512,
+                width=512
+            )
+        
+        if progress_callback:
+            progress_callback(95, "Finalizing image...")
+        
+        image = result.images[0]
+        return image, prompt
         
     except Exception as e:
         error_message = str(e)
-        if "CUDA" in error_message or "GPU" in error_message or "memory" in error_message.lower():
-            return None, f"Memory/GPU error (try running locally): {error_message}"
+        if "CUDA" in error_message or "GPU" in error_message:
+            return None, f"GPU error (will try CPU): {error_message}"
         else:
             return None, f"Error generating image: {error_message}"
         
@@ -494,16 +502,10 @@ features = ['height','weight','base_experience','hp','attack','defense',
             'special-attack','special-defense','speed']
 user_input = {}
 
-st.title("🔥 Pokémon Creator - AI-Powered Generator")
-
-# Show deployment status
-if not TORCH_AVAILABLE:
-    st.info("🌐 **Cloud Mode**: Running optimized version for web deployment. AI image generation may be limited.")
-else:
-    st.success("🚀 **Full Mode**: All AI features available!")
+st.title("Pokémon Feature Predictor")
 
 # Sidebar navigation
-tab1, tab2, tab3 = st.tabs(["🎯 Predictor - Make your Pokémon!", "📊 Dataset", "📈 Analytics"])
+tab1, tab2, tab3 = st.tabs(["Predictor - Make your Pokémon!", "Dataset", "Analytics"])
 
 with tab1:
     st.header("Feature Predictor")
@@ -585,89 +587,62 @@ with tab1:
 
     if total_input == 9:
         
-        # Initialize session state for button styling
-        if 'last_clicked' not in st.session_state:
-            st.session_state.last_clicked = 'image'  # Default to image
-
         # Create two columns for different generation options
         col1, col2 = st.columns(2)
         
         with col1:
-            # Show different button states based on AI availability
-            if TORCH_AVAILABLE:
-                generate_image = st.button(
-                    "🎨 Generate AI Image", 
-                    use_container_width=True,
-                    help="Create custom Pokemon artwork using Stable Diffusion AI"
-                )
-            else:
-                generate_image = st.button(
-                    "🎨 Generate AI Image (Unavailable)", 
-                    use_container_width=True,
-                    disabled=True,
-                    help="AI image generation requires PyTorch and Diffusers. Available when running locally."
-                )
+            generate_image = st.button("Generate Image", type="primary", use_container_width=True)
         
         with col2:
-            generate_profile = st.button(
-                "🏷️ Generate AI Name", 
-                use_container_width=True,
-                help="Create Pokemon name using AI text generation with procedural fallback"
-            )
+            generate_profile = st.button("Generate Name", type="secondary", use_container_width=True)
         
         # Option to generate both
-        if TORCH_AVAILABLE:
-            generate_both = st.button("🚀 Generate Complete Pokémon (AI Image + Name)", use_container_width=True)
-        else:
-            generate_both = st.button("🚀 Generate Complete Pokémon (Name Only - Limited Mode)", use_container_width=True)
-
+        generate_both = st.button("Generate Complete Pokémon (Image + Profile)", use_container_width=True)
+        
         if generate_image:
-            if not TORCH_AVAILABLE:
-                st.error("🚫 AI image generation is not available in this deployment mode.")
-                st.info("💡 **To use AI image generation:**\n- Run locally: `pip install torch diffusers` then `streamlit run Modeling.py`\n- Or use a paid hosting service with more memory")
+            st.write("**Generating your custom Pokémon image...**")
+            
+            # Create progress bar and status text
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            # Define progress callback function
+            def update_progress(percent, message):
+                progress_bar.progress(percent / 100.0)  # Convert percentage to 0.0-1.0 range
+                status_text.text(message)
+            
+            # Generate Pokémon image with progress updates
+            img, prompt = generate_pokemon_image_free(user_input, update_progress)
+            
+            if img:
+                # Final progress update
+                progress_bar.progress(1.0)  # 100% completion
+                status_text.text("Your Pokémon is ready!")
+                
+                # Small delay to show completion
+                import time
+                time.sleep(0.5)
+                
+                # Clear progress indicators
+                progress_bar.empty()
+                status_text.empty()
+                
+                # Show the image
+                st.image(img, caption="Generated Pokémon Image", use_container_width=True)
+                
+                # Display prompt in a cleaner, expandable format
+                with st.expander("View AI Prompt Details", expanded=False):
+                    st.text_area("Full prompt used to generate this Pokemon:", prompt, height=150, disabled=True)
+                
             else:
-                st.write("**🎨 Generating your custom Pokémon image...**")
-                
-                # Create progress bar and status text
-                progress_bar = st.progress(0)
-                status_text = st.empty()
-                
-                # Define progress callback function
-                def update_progress(percent, message):
-                    progress_bar.progress(percent / 100.0)  # Convert percentage to 0.0-1.0 range
-                    status_text.text(message)
-                
-                # Generate Pokémon image with progress updates
-                img, prompt = generate_pokemon_image_free(user_input, update_progress)
-                
-                if img:
-                    # Final progress update
-                    progress_bar.progress(1.0)  # 100% completion
-                    status_text.text("Your Pokémon is ready!")
-                    
-                    # Small delay to show completion
-                    time.sleep(0.5)
-                    
-                    # Clear progress indicators
-                    progress_bar.empty()
-                    status_text.empty()
-                    
-                    # Show the image
-                    st.image(img, caption="Generated Pokémon Image", use_container_width=True)
-                    
-                    # Display prompt in a cleaner, expandable format
-                    with st.expander("View AI Prompt Details", expanded=False):
-                        st.text_area("Full prompt used to generate this Pokemon:", prompt, height=150, disabled=True)
-                    
-                else:
-                    # Error occurred
-                    progress_bar.empty()
-                    status_text.empty()
-                    st.error(f"❌ {prompt}")  # prompt contains error message if img is None
-                    st.info("💡 **Troubleshooting:**\n- First run may be slower as it downloads the AI model\n- Free hosting services have memory limits\n- Try running locally for full AI features")
+                # Error occurred
+                progress_bar.empty()
+                status_text.empty()
+                st.error(f"{prompt}")  # prompt contains error message if img is None
+                st.info("💡 **Tip:** The first run might be slower as it downloads the AI model. Try again!")
         
         elif generate_profile:
-            st.write("**🏷️ Generating your Pokémon name...**")
+            st.write("**Generating your Pokémon name...**")
             
             # Create progress bar and status text
             progress_bar = st.progress(0)
@@ -687,6 +662,7 @@ with tab1:
             status_text.text("Your Pokémon profile is ready!")
             
             # Small delay to show completion
+            import time
             time.sleep(0.5)
             
             # Clear progress indicators
@@ -694,22 +670,18 @@ with tab1:
             status_text.empty()
             
             # Display the generated profile
-            st.success(f"🎉 Meet your new Pokémon: **{profile['name']}**!")
+            st.success(f"Meet your new Pokémon: **{profile['name']}**!")
             
            
-            st.subheader(f"⚡ {profile['name']} Profile")
-            st.write(f"**🏷️ Suggested Type:** {profile['type_suggestion']}")
-            st.write(f"**💪 Specialty:** {profile['stats_summary']}")
+            st.subheader(f"{profile['name']} Profile")
+            st.write(f"**Suggested Type:** {profile['type_suggestion']}")
+            st.write(f"**Specialty:** {profile['stats_summary']}")
             
-            # Show name generation details
-            with st.expander("View Name Generation Details", expanded=False):
-                if 'name_prompt' in profile:
-                    st.text_area("Name generation prompt:", profile['name_prompt'], height=80, disabled=True)
-                if 'error' in profile:
-                    st.warning(f"Note: Some features used fallback generation due to: {profile['error']}")
+            if 'error' in profile:
+                st.warning(f"Note: Some features used fallback generation due to: {profile['error']}")
         
         elif generate_both:
-            st.write("**🚀 Creating your complete Pokémon...**")
+            st.write("**Creating your complete Pokémon...**")
             
             # Create progress bar and status text
             progress_bar = st.progress(0)
@@ -725,23 +697,17 @@ with tab1:
             progress_bar.progress(0.1)  # 10%
             profile = generate_pokemon_name(user_input, lambda p, m: update_progress(10 + p//3, m))
             
-            # Then try to generate image if available
-            img = None
-            prompt = ""
-            if TORCH_AVAILABLE:
-                status_text.text("🎨 Now generating image...")
-                progress_bar.progress(0.4)  # 40%
-                img, prompt = generate_pokemon_image_free(user_input, lambda p, m: update_progress(40 + p*0.6, m))
-            else:
-                status_text.text("🎨 Skipping image generation (not available)...")
-                progress_bar.progress(0.9)  # 90%
-                prompt = "Image generation not available in lightweight deployment mode"
+            # Then generate image
+            status_text.text("🎨 Now generating image...")
+            progress_bar.progress(0.4)  # 40%
+            img, prompt = generate_pokemon_image_free(user_input, lambda p, m: update_progress(40 + p*0.6, m))
             
             # Final progress update
             progress_bar.progress(1.0)  # 100% completion
-            status_text.text("Your Pokémon is ready!")
+            status_text.text("Your complete Pokémon is ready!")
             
             # Small delay to show completion
+            import time
             time.sleep(0.5)
             
             # Clear progress indicators
@@ -749,44 +715,31 @@ with tab1:
             status_text.empty()
             
             if img:
-                # Display complete Pokémon with image
-                st.success(f"🎉 Meet your new Pokémon: **{profile['name']}**!")
+                # Display complete Pokémon
+                st.success(f"Meet your new Pokémon: **{profile['name']}**!")
                 
                 # Show image first
                 st.image(img, caption=f"{profile['name']} - Your Generated Pokémon", use_container_width=True)
                 
                 # Show profile below image
-                st.subheader(f"⚡ {profile['name']} Profile")
-                st.write(f"**🏷️ Suggested Type:** {profile['type_suggestion']}")
-                st.write(f"**💪 Specialty:** {profile['stats_summary']}")
+                st.subheader(f"{profile['name']} Profile")
+                st.write(f"**Suggested Type:** {profile['type_suggestion']}")
+                st.write(f"**Specialty:** {profile['stats_summary']}")
                     
                 
                 # Expandable prompt details
                 with st.expander("View AI Generation Details", expanded=False):
                     st.text_area("Image generation prompt:", prompt, height=100, disabled=True)
-                    if 'name_prompt' in profile:
-                        st.text_area("Name generation prompt:", profile['name_prompt'], height=80, disabled=True)
                     if 'error' in profile:
                         st.warning(f"Text generation note: {profile['error']}")
             else:
-                # Display profile without image
-                st.success(f"🎉 Meet your new Pokémon: **{profile['name']}**!")
+                st.error(f"Image generation failed: {prompt}")
+                # Still show the profile even if image failed
+                st.success(f"But here's your Pokémon profile: **{profile['name']}**!")
                 
-                if not TORCH_AVAILABLE:
-                    st.info("🌐 **Cloud Mode**: Image generation not available in this deployment. Profile generated successfully!")
-                else:
-                    st.error(f"❌ Image generation failed: {prompt}")
 
-                st.subheader(f"⚡ {profile['name']} Profile")
-                st.write(f"**🏷️ Type:** {profile['type_suggestion']}")
-                st.write(f"**💪 Specialty:** {profile['stats_summary']}")
-                
-                # Show name generation details even when image fails
-                with st.expander("View Name Generation Details", expanded=False):
-                    if 'name_prompt' in profile:
-                        st.text_area("Name generation prompt:", profile['name_prompt'], height=80, disabled=True)
-                    if 'error' in profile:
-                        st.warning(f"Note: {profile['error']}")
+                st.write(f"**Type:** {profile['type_suggestion']}")
+                st.write(f"**Specialty:** {profile['stats_summary']}")
                 
 
 with tab2:
