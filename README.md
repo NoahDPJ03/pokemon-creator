@@ -47,11 +47,6 @@ The codebase includes complete implementations for:
 
 ## Usage
 
-### Live Demo
-Visit the deployed version: [Pokemon Creator on Streamlit](https://pokemon-creator-app.streamlit.app)
-
-**Note**: Only ML prediction features are available in the live demo due to cloud hosting limitations.
-
 ### Local Development (Full Features)
 ```bash
 # Clone repository
