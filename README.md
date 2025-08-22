@@ -121,12 +121,12 @@ The ML models use a pipeline with median imputation for missing values and Rando
 
 ## Development Status
 
-- ✅ **ML Prediction Engine**: Fully functional
-- ✅ **Web Interface**: Complete and responsive  
-- ✅ **Data Pipeline**: Working with cleaned Pokemon dataset
-- 🚧 **AI Image Generation**: Under development
-- 🚧 **AI Name Generation**: Under development
-- 🚧 **Deployment**: Optimizing for cloud hosting
+- **ML Prediction Engine**: Fully functional
+- **Web Interface**: Complete and responsive  
+- **Data Pipeline**: Working with cleaned Pokemon dataset
+- **AI Image Generation**: Under development
+- **AI Name Generation**: Under development
+- **Deployment**: Optimizing for cloud hosting
 
 ## Project Structure
 
