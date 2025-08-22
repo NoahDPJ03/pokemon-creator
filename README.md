@@ -4,16 +4,17 @@ A machine learning-powered Pokemon creator that predicts stats and generates Pok
 
 ## Project Status
 
-### Working Features ✅
+### Working Features
 - **ML Stat Prediction**: Random Forest models predict missing Pokemon stats with 95% confidence intervals
 - **Interactive Web App**: Built with Streamlit for easy Pokemon creation
 - **Dataset Explorer**: Browse and analyze 1000+ Pokemon dataset
 - **Model Analytics**: Detailed Random Forest performance metrics
-- **Procedural Name Generation**: Algorithm-based Pokemon name creation
 
-### Under Development 🚧
-- **AI Image Generation**: Stable Diffusion integration (code complete, disabled for deployment)
-- **AI Text Generation**: DistilGPT-2 name generation (code complete, disabled for deployment)
+
+### Under Development
+- **Procedural Name Generation**: Algorithm-based Pokemon name creation
+- **AI Image Generation**: Stable Diffusion integration
+- **AI Text Generation**: DistilGPT-2 name generation 
 
 ## Deployment Challenges
 
