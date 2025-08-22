@@ -10,10 +10,17 @@ A machine learning-powered Pokemon creator that predicts stats and generates Pok
 - **Dataset Explorer**: Browse and analyze 1000+ Pokemon dataset
 - **Model Analytics**: Detailed Random Forest performance metrics
 
+<<<<<<< HEAD
 ### Under Development
-- **Enhanced Validation System**: Real-time warnings for unrealistic Pokemon stats
-- **AI Image Generation**: Stable Diffusion integration (code complete, available for local development)
-- **AI Text Generation**: DistilGPT-2 name generation (code complete, available for local development)
+- **AI Image Generation**: Stable Diffusion integration (code complete, disabled for deployment)
+- **AI Text Generation**: DistilGPT-2 name generation (code complete, disabled for deployment)
+=======
+
+### Under Development
+- **Procedural Name Generation**: Algorithm-based Pokemon name creation
+- **AI Image Generation**: Stable Diffusion integration
+- **AI Text Generation**: DistilGPT-2 name generation 
+>>>>>>> b3a8c6f426ed87a96c82fa9028c6b5adadb6c7ac
 
 ## Deployment Challenges
 
