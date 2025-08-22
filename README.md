@@ -1,78 +1,134 @@
-# 🔥 Pokemon Creator - AI-Powered Pokemon Generator
+# Pokemon Creator - WORK IN PROGRESS
 
-Create your own custom Pokemon with ML-predicted stats, AI-generated images, and intelligent names!
+A machine learning-powered Pokemon creator that predicts stats and generates Pokemon profiles. Originally designed with full AI image and text generation capabilities, currently deployed with core ML features due to hosting limitations.
 
-## 🌟 Features
+## Project Status
 
-- **📊 Smart Prediction**: ML models predict missing Pokemon stats with 95% confidence intervals
-- **🎨 AI Image Generation**: Stable Diffusion creates unique Pokemon artwork based on your stats
-- **🏷️ Intelligent Naming**: Hybrid AI + procedural system generates Pokemon-appropriate names
-- **📈 Data Analytics**: Explore the complete Pokemon dataset and model insights
+### Working Features ✅
+- **ML Stat Prediction**: Random Forest models predict missing Pokemon stats with 95% confidence intervals
+- **Interactive Web App**: Built with Streamlit for easy Pokemon creation
+- **Dataset Explorer**: Browse and analyze 1000+ Pokemon dataset
+- **Model Analytics**: Detailed Random Forest performance metrics
+- **Procedural Name Generation**: Algorithm-based Pokemon name creation
 
-## 🚀 Try It Live
+### Under Development 🚧
+- **AI Image Generation**: Stable Diffusion integration (code complete, disabled for deployment)
+- **AI Text Generation**: DistilGPT-2 name generation (code complete, disabled for deployment)
 
-Visit the live app: [Coming Soon - Deploy to Streamlit Cloud]
+## Deployment Challenges
 
-## 🛠️ Tech Stack
+This project was developed with advanced AI features including:
+- Stable Diffusion for custom Pokemon artwork generation
+- DistilGPT-2 for AI-powered name creation
+- PyTorch and Transformers integration
+- GPU acceleration support
 
-- **Frontend**: Streamlit
-- **ML Models**: Random Forest (scikit-learn)
-- **Image Generation**: Stable Diffusion v1.5
-- **Text Generation**: DistilGPT-2
-- **Data Processing**: Pandas, NumPy
+However, when deploying to **Streamlit Community Cloud**, I encountered significant limitations:
+- Memory constraints preventing large AI model loading
+- GPU unavailability for Stable Diffusion inference
+- Frequent crashes and timeouts during AI generation
 
-## 📋 Local Setup
+**Solution**: The complete AI generation code is preserved in the codebase but commented out for deployment stability. The app focuses on the robust ML prediction system that works reliably in cloud environments.
 
-1. Clone the repository:
+## Technical Implementation
+
+### Machine Learning Pipeline
+- **Algorithm**: Random Forest Regressor (100 trees per feature)
+- **Features**: Height, weight, base experience, HP, attack, defense, special attack, special defense, speed
+- **Confidence Intervals**: 95% prediction intervals using tree ensemble variance
+- **Missing Value Handling**: Median imputation strategy
+
+### Preserved AI Features (Local Development)
+The codebase includes complete implementations for:
+- Custom Pokemon image generation with stat-based prompt engineering
+- AI text generation with procedural fallbacks
+- Memory optimization for large model inference
+- Progressive loading with user feedback
+
+## Usage
+
+### Live Demo
+Visit the deployed version: [Pokemon Creator on Streamlit](https://pokemon-creator-app.streamlit.app)
+
+**Note**: Only ML prediction features are available in the live demo due to cloud hosting limitations.
+
+### Local Development (Full Features)
 ```bash
+# Clone repository
 git clone https://github.com/NoahDPJ03/pokemon-creator.git
 cd pokemon-creator
-```
 
-2. Install dependencies:
-```bash
+# Install dependencies for full AI features
 pip install -r requirements.txt
-```
+pip install torch diffusers transformers
 
-3. Run the app:
-```bash
+# Enable AI features in Modeling.py:
+# 1. Uncomment AI import statements
+# 2. Set TORCH_AVAILABLE = True
+# 3. Uncomment AI generation functions
+
+# Run locally
 streamlit run Modeling.py
 ```
 
-## 📊 Dataset
+## Learning Outcomes
 
-Pokemon data sourced from [PokéAPI](https://pokeapi.co/) with 9 statistical features including:
-- Height, Weight, Base Experience
-- HP, Attack, Defense, Special Attack, Special Defense, Speed
+This project demonstrates:
+- **ML Engineering**: Building production-ready prediction models with confidence intervals
+- **AI Integration**: Implementing Stable Diffusion and language models (preserved in code)
+- **Web Development**: Creating interactive data science applications with Streamlit
+- **Deployment Strategy**: Adapting complex AI applications for cloud hosting constraints
+- **Code Preservation**: Maintaining complete feature implementations for portfolio purposes
 
-## 🎯 How It Works
+### What I Learned About Deployment
 
-1. **Input Pokemon Stats**: Enter known values for any combination of the 9 features
-2. **ML Prediction**: Random Forest models predict missing stats with confidence intervals
-3. **Generate Content**: Choose to generate names, images, or complete Pokemon profiles
-4. **Explore Results**: View detailed generation prompts and model analytics
+- Free hosting services have strict memory limits that prevent large AI model usage
+- Streamlit Community Cloud doesn't support GPU acceleration
+- It's important to have fallback strategies for resource-intensive features
+- Code preservation is valuable even when features must be disabled
 
-## 🤖 AI Models
+## Dataset
 
-- **Name Generation**: DistilGPT-2 with procedural fallback system
-- **Image Generation**: Stable Diffusion v1.5 with detailed stat-based prompting
-- **Stat Prediction**: Random Forest ensemble with 100 trees per feature
+The Pokemon dataset contains comprehensive information about Pokemon including:
+- Physical characteristics (height, weight)
+- Base stats (HP, Attack, Defense, Special Attack, Special Defense, Speed)
+- Experience values and other metadata
 
-## 📈 Model Performance
+Data sourced from [PokéAPI](https://pokeapi.co/)
 
-- **Confidence Intervals**: 95% prediction intervals using tree variance
-- **Feature Engineering**: Automatic handling of missing values with median imputation
-- **Cross-Validation**: Robust model training on complete Pokemon dataset
+## How It Works
 
-## 🎨 Example Generations
+1. **Input**: Enter known Pokemon statistics in the input fields
+2. **Prediction**: Random Forest models predict missing values with confidence intervals
+3. **Visualization**: See predictions with uncertainty bounds
+4. **Analysis**: Explore model performance and feature importance
 
-The app creates Pokemon that reflect their statistical profiles:
-- **High Attack**: Aggressive designs with sharp features
-- **High Defense**: Armored, fortress-like appearances  
-- **High Speed**: Aerodynamic, swift-looking creatures
-- **High Special Attack**: Mystical, energy-radiating designs
+The ML models use a pipeline with median imputation for missing values and Random Forest regression with 100 trees per feature.
 
-## 📁 Project Structure
+## AI Models (Under Development)
+
+- **Name Generation**: DistilGPT-2 with procedural fallback system - In Progress
+- **Image Generation**: Stable Diffusion v1.5 with detailed stat-based prompting - In Progress
+- **Stat Prediction**: Random Forest ensemble with 100 trees per feature - Working
+
+## Model Performance
+
+- **Algorithm**: Random Forest Regressor
+- **Trees per model**: 100 
+- **Cross-validation**: Built-in through ensemble averaging
+- **Confidence intervals**: Calculated from tree prediction variance
+- **Features**: 9 Pokemon statistics
+
+## Development Status
+
+- ✅ **ML Prediction Engine**: Fully functional
+- ✅ **Web Interface**: Complete and responsive  
+- ✅ **Data Pipeline**: Working with cleaned Pokemon dataset
+- 🚧 **AI Image Generation**: Under development
+- 🚧 **AI Name Generation**: Under development
+- 🚧 **Deployment**: Optimizing for cloud hosting
+
+## Project Structure
 
 ```
 pokemon-creator/
@@ -84,14 +140,45 @@ pokemon-creator/
 └── requirements.txt        # Dependencies
 ```
 
-## 🔧 Development
+## Development
 
 The project includes Jupyter notebooks for data exploration and model development:
 - `Cleaning.ipynb`: Data preprocessing and feature engineering
 - `Modeling.ipynb`: Model training and evaluation
 
-## 🙏 Acknowledgments
+## Contributing
+
+This is a work-in-progress project. Contributions welcome!
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## License
+
+This project is open source and available under the [MIT License](LICENSE).
+
+## Deployment
+
+### Current Status
+The ML prediction functionality works reliably and can be deployed to:
+- Streamlit Community Cloud
+- Heroku
+- Railway
+- Any Python hosting service
+
+AI features are still being developed and tested.
+
+## Notes
+
+- The prediction engine is production-ready
+- AI image/name generation features are experimental
+- Local development environment required for full feature testing
+
+## Acknowledgments
 
 - Pokemon data from [PokéAPI](https://pokeapi.co/)
-- Image generation powered by [Hugging Face Diffusers](https://github.com/huggingface/diffusers)
+- Image generation powered by [Hugging Face Diffusers](https://github.com/huggingface/diffusers) - In Development
 - Built with [Streamlit](https://streamlit.io/)

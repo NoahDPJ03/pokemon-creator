@@ -1,15 +1,13 @@
-# Optimized requirements for deployment
+# Deployment requirements for Streamlit Cloud
+# Core ML and web app dependencies only - AI features disabled for stability
 streamlit>=1.28.0
 pandas>=2.0.0
 numpy>=1.24.0
 scikit-learn>=1.3.0
 matplotlib>=3.7.0
 
-# Text generation only (much smaller)
-transformers>=4.30.0
+# Note: AI generation dependencies (torch, diffusers, transformers) 
+# removed for deployment stability. Complete AI code preserved in Modeling.py
+# but commented out due to Streamlit Cloud memory limitations.
 
-# Optional: Only include if image generation works within memory limits
-# torch>=2.0.0
-# diffusers>=0.20.0
-# accelerate>=0.20.0
-# safetensors>=0.3.0
+# For local development with full AI features, use requirements.txt instead
