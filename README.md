@@ -22,6 +22,7 @@ A machine learning-powered Pokemon creator that predicts stats and generates Pok
 - **Features**: Height, weight, base experience, HP, attack, defense, special attack, special defense, speed
 - **Confidence Intervals**: 95% prediction intervals using tree ensemble variance
 - **Missing Value Handling**: Median imputation strategy
+- Models get updated as user inputs their own stats
 
 ### Preserved AI Features (Local Development)
 The codebase includes complete implementations for:
