@@ -5,10 +5,25 @@ from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 import streamlit as st
 import matplotlib.pyplot as plt
-from diffusers import DiffusionPipeline
-from transformers import pipeline, GPT2LMHeadModel, GPT2Tokenizer
-import torch
-import re, numpy as np, torch
+import re
+import time
+import warnings
+warnings.filterwarnings('ignore')
+
+# Try to import AI libraries with graceful fallback
+try:
+    from diffusers import DiffusionPipeline
+    import torch
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+    st.warning("Running in lightweight mode - AI image generation disabled due to hosting constraints")
+
+try:
+    from transformers import pipeline as hf_pipeline
+    TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    TRANSFORMERS_AVAILABLE = False
 
 
 df = pd.read_csv('pokemon_data_cleaned.csv')
@@ -89,13 +104,19 @@ _NAME_RE = re.compile(r"^[A-Z][a-z]{3,11}$")
 
 def _llm_name(size_category: str, build_category: str) -> tuple[str | None, str]:
     """Try to get a single clean name from a tiny LM. Returns (name, prompt)."""
+    if not TRANSFORMERS_AVAILABLE:
+        return None, "AI text generation not available in lightweight mode"
+    
     if 'text_generator' not in st.session_state:
-        st.session_state.text_generator = pipeline(
-            "text-generation",
-            model="distilgpt2",
-            tokenizer="distilgpt2",
-            device=0 if torch.cuda.is_available() else -1
-        )
+        try:
+            st.session_state.text_generator = hf_pipeline(
+                "text-generation",
+                model="distilgpt2",
+                tokenizer="distilgpt2",
+                device=0 if TORCH_AVAILABLE and torch.cuda.is_available() else -1
+            )
+        except Exception as e:
+            return None, f"Error loading text model: {str(e)}"
 
     # Few-shot-ish, with a strict pattern and an obvious stopping cue.
     prompt = (
@@ -105,29 +126,32 @@ def _llm_name(size_category: str, build_category: str) -> tuple[str | None, str]
         "Name: "
     )
 
-    outs = st.session_state.text_generator(
-        prompt,
-        max_new_tokens=6,              # keep it short
-        num_return_sequences=8,        # try a few
-        do_sample=True,
-        top_p=0.92,
-        top_k=50,
-        temperature=0.9,
-        repetition_penalty=1.1,
-        return_full_text=False         # **critical**: don't echo the prompt
-    )
+    try:
+        outs = st.session_state.text_generator(
+            prompt,
+            max_new_tokens=6,              # keep it short
+            num_return_sequences=8,        # try a few
+            do_sample=True,
+            top_p=0.92,
+            top_k=50,
+            temperature=0.9,
+            repetition_penalty=1.1,
+            return_full_text=False         # **critical**: don't echo the prompt
+        )
 
-    # Extract first word-like token from each completion, filter strictly.
-    for o in outs:
-        text = o["generated_text"].strip()
-        # take the first alphabetic chunk
-        m = re.search(r"[A-Za-z]{4,12}", text)
-        if not m:
-            continue
-        candidate = m.group(0).capitalize()
-        if _NAME_RE.match(candidate):
-            return candidate, prompt
-    return None, prompt
+        # Extract first word-like token from each completion, filter strictly.
+        for o in outs:
+            text = o["generated_text"].strip()
+            # take the first alphabetic chunk
+            m = re.search(r"[A-Za-z]{4,12}", text)
+            if not m:
+                continue
+            candidate = m.group(0).capitalize()
+            if _NAME_RE.match(candidate):
+                return candidate, prompt
+        return None, prompt
+    except Exception as e:
+        return None, f"AI generation failed: {str(e)}"
 
 
 def _procedural_name(primary_stat: str) -> str:
@@ -250,6 +274,9 @@ def get_type_suggestion(user_input):
 
 def generate_pokemon_image_free(user_input, progress_callback=None):
     """Generate a Pokemon image using free Hugging Face Stable Diffusion"""
+    
+    if not TORCH_AVAILABLE:
+        return None, "🚫 AI image generation not available - missing PyTorch/Diffusers. Install with: pip install torch diffusers"
     
     # Get the final values (user input or predictions)
     height = user_input.get('height', 0)
@@ -412,40 +439,49 @@ def generate_pokemon_image_free(user_input, progress_callback=None):
             if progress_callback:
                 progress_callback(40, "Loading Stable Diffusion model (first time only)...")
             
-            st.session_state.pokemon_pipeline = DiffusionPipeline.from_pretrained(
-                "runwayml/stable-diffusion-v1-5",
-                torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-                use_safetensors=True
-            )
-            
-            
-            # Move to GPU if available, otherwise CPU
-            if torch.cuda.is_available():
-                st.session_state.pokemon_pipeline = st.session_state.pokemon_pipeline.to("cuda")
+            try:
+                st.session_state.pokemon_pipeline = DiffusionPipeline.from_pretrained(
+                    "runwayml/stable-diffusion-v1-5",
+                    torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+                    use_safetensors=True
+                )
+                
+                # Move to GPU if available, otherwise CPU
+                if torch.cuda.is_available():
+                    st.session_state.pokemon_pipeline = st.session_state.pokemon_pipeline.to("cuda")
+            except Exception as e:
+                return None, f"Failed to load Stable Diffusion model: {str(e)}. This may be due to memory constraints on free hosting."
         
         if progress_callback:
             progress_callback(70, "Generating your Pokémon...")
         
-        # Generate image
-        with torch.inference_mode():
-            result = st.session_state.pokemon_pipeline(
-                prompt,
-                num_inference_steps=25,  # More steps for better quality
-                guidance_scale=8.0,     # Stronger guidance for better adherence to prompt
-                height=512,
-                width=512
-            )
-        
-        if progress_callback:
-            progress_callback(95, "Finalizing image...")
-        
-        image = result.images[0]
-        return image, prompt
+        # Generate image with memory-conscious settings
+        try:
+            with torch.inference_mode():
+                result = st.session_state.pokemon_pipeline(
+                    prompt,
+                    num_inference_steps=20,  # Reduced for memory efficiency
+                    guidance_scale=7.5,     # Slightly reduced 
+                    height=512,
+                    width=512
+                )
+            
+            if progress_callback:
+                progress_callback(95, "Finalizing image...")
+            
+            image = result.images[0]
+            return image, prompt
+        except torch.cuda.OutOfMemoryError:
+            # Clear GPU memory and try CPU
+            if hasattr(st.session_state, 'pokemon_pipeline'):
+                del st.session_state.pokemon_pipeline
+            torch.cuda.empty_cache()
+            return None, "GPU out of memory. Try running locally for AI image generation."
         
     except Exception as e:
         error_message = str(e)
-        if "CUDA" in error_message or "GPU" in error_message:
-            return None, f"GPU error (will try CPU): {error_message}"
+        if "CUDA" in error_message or "GPU" in error_message or "memory" in error_message.lower():
+            return None, f"Memory/GPU error (try running locally): {error_message}"
         else:
             return None, f"Error generating image: {error_message}"
         
@@ -458,10 +494,16 @@ features = ['height','weight','base_experience','hp','attack','defense',
             'special-attack','special-defense','speed']
 user_input = {}
 
-st.title("Pokémon Feature Predictor")
+st.title("🔥 Pokémon Creator - AI-Powered Generator")
+
+# Show deployment status
+if not TORCH_AVAILABLE:
+    st.info("🌐 **Cloud Mode**: Running optimized version for web deployment. AI image generation may be limited.")
+else:
+    st.success("🚀 **Full Mode**: All AI features available!")
 
 # Sidebar navigation
-tab1, tab2, tab3 = st.tabs(["Predictor - Make your Pokémon!", "Dataset", "Analytics"])
+tab1, tab2, tab3 = st.tabs(["🎯 Predictor - Make your Pokémon!", "📊 Dataset", "📈 Analytics"])
 
 with tab1:
     st.header("Feature Predictor")
@@ -551,64 +593,81 @@ with tab1:
         col1, col2 = st.columns(2)
         
         with col1:
-            generate_image = st.button(
-                "Generate Image", 
-                use_container_width=True
-            )
+            # Show different button states based on AI availability
+            if TORCH_AVAILABLE:
+                generate_image = st.button(
+                    "🎨 Generate AI Image", 
+                    use_container_width=True,
+                    help="Create custom Pokemon artwork using Stable Diffusion AI"
+                )
+            else:
+                generate_image = st.button(
+                    "🎨 Generate AI Image (Unavailable)", 
+                    use_container_width=True,
+                    disabled=True,
+                    help="AI image generation requires PyTorch and Diffusers. Available when running locally."
+                )
         
         with col2:
             generate_profile = st.button(
-                "Generate Name", 
-                use_container_width=True
+                "🏷️ Generate AI Name", 
+                use_container_width=True,
+                help="Create Pokemon name using AI text generation with procedural fallback"
             )
         
         # Option to generate both
-        generate_both = st.button("Generate Complete Pokémon (Image + Profile)", use_container_width=True)
+        if TORCH_AVAILABLE:
+            generate_both = st.button("🚀 Generate Complete Pokémon (AI Image + Name)", use_container_width=True)
+        else:
+            generate_both = st.button("🚀 Generate Complete Pokémon (Name Only - Limited Mode)", use_container_width=True)
 
         if generate_image:
-            st.write("**Generating your custom Pokémon image...**")
-            
-            # Create progress bar and status text
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-            
-            # Define progress callback function
-            def update_progress(percent, message):
-                progress_bar.progress(percent / 100.0)  # Convert percentage to 0.0-1.0 range
-                status_text.text(message)
-            
-            # Generate Pokémon image with progress updates
-            img, prompt = generate_pokemon_image_free(user_input, update_progress)
-            
-            if img:
-                # Final progress update
-                progress_bar.progress(1.0)  # 100% completion
-                status_text.text("Your Pokémon is ready!")
-                
-                # Small delay to show completion
-                import time
-                time.sleep(0.5)
-                
-                # Clear progress indicators
-                progress_bar.empty()
-                status_text.empty()
-                
-                # Show the image
-                st.image(img, caption="Generated Pokémon Image", use_container_width=True)
-                
-                # Display prompt in a cleaner, expandable format
-                with st.expander("View AI Prompt Details", expanded=False):
-                    st.text_area("Full prompt used to generate this Pokemon:", prompt, height=150, disabled=True)
-                
+            if not TORCH_AVAILABLE:
+                st.error("🚫 AI image generation is not available in this deployment mode.")
+                st.info("💡 **To use AI image generation:**\n- Run locally: `pip install torch diffusers` then `streamlit run Modeling.py`\n- Or use a paid hosting service with more memory")
             else:
-                # Error occurred
-                progress_bar.empty()
-                status_text.empty()
-                st.error(f"{prompt}")  # prompt contains error message if img is None
-                st.info("💡 **Tip:** The first run might be slower as it downloads the AI model. Try again!")
+                st.write("**🎨 Generating your custom Pokémon image...**")
+                
+                # Create progress bar and status text
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                
+                # Define progress callback function
+                def update_progress(percent, message):
+                    progress_bar.progress(percent / 100.0)  # Convert percentage to 0.0-1.0 range
+                    status_text.text(message)
+                
+                # Generate Pokémon image with progress updates
+                img, prompt = generate_pokemon_image_free(user_input, update_progress)
+                
+                if img:
+                    # Final progress update
+                    progress_bar.progress(1.0)  # 100% completion
+                    status_text.text("Your Pokémon is ready!")
+                    
+                    # Small delay to show completion
+                    time.sleep(0.5)
+                    
+                    # Clear progress indicators
+                    progress_bar.empty()
+                    status_text.empty()
+                    
+                    # Show the image
+                    st.image(img, caption="Generated Pokémon Image", use_container_width=True)
+                    
+                    # Display prompt in a cleaner, expandable format
+                    with st.expander("View AI Prompt Details", expanded=False):
+                        st.text_area("Full prompt used to generate this Pokemon:", prompt, height=150, disabled=True)
+                    
+                else:
+                    # Error occurred
+                    progress_bar.empty()
+                    status_text.empty()
+                    st.error(f"❌ {prompt}")  # prompt contains error message if img is None
+                    st.info("💡 **Troubleshooting:**\n- First run may be slower as it downloads the AI model\n- Free hosting services have memory limits\n- Try running locally for full AI features")
         
         elif generate_profile:
-            st.write("**Generating your Pokémon name...**")
+            st.write("**🏷️ Generating your Pokémon name...**")
             
             # Create progress bar and status text
             progress_bar = st.progress(0)
@@ -628,7 +687,6 @@ with tab1:
             status_text.text("Your Pokémon profile is ready!")
             
             # Small delay to show completion
-            import time
             time.sleep(0.5)
             
             # Clear progress indicators
@@ -636,12 +694,12 @@ with tab1:
             status_text.empty()
             
             # Display the generated profile
-            st.success(f"Meet your new Pokémon: **{profile['name']}**!")
+            st.success(f"🎉 Meet your new Pokémon: **{profile['name']}**!")
             
            
-            st.subheader(f"{profile['name']} Profile")
-            st.write(f"**Suggested Type:** {profile['type_suggestion']}")
-            st.write(f"**Specialty:** {profile['stats_summary']}")
+            st.subheader(f"⚡ {profile['name']} Profile")
+            st.write(f"**🏷️ Suggested Type:** {profile['type_suggestion']}")
+            st.write(f"**💪 Specialty:** {profile['stats_summary']}")
             
             # Show name generation details
             with st.expander("View Name Generation Details", expanded=False):
@@ -651,7 +709,7 @@ with tab1:
                     st.warning(f"Note: Some features used fallback generation due to: {profile['error']}")
         
         elif generate_both:
-            st.write("**Creating your complete Pokémon...**")
+            st.write("**🚀 Creating your complete Pokémon...**")
             
             # Create progress bar and status text
             progress_bar = st.progress(0)
@@ -667,17 +725,23 @@ with tab1:
             progress_bar.progress(0.1)  # 10%
             profile = generate_pokemon_name(user_input, lambda p, m: update_progress(10 + p//3, m))
             
-            # Then generate image
-            status_text.text("🎨 Now generating image...")
-            progress_bar.progress(0.4)  # 40%
-            img, prompt = generate_pokemon_image_free(user_input, lambda p, m: update_progress(40 + p*0.6, m))
+            # Then try to generate image if available
+            img = None
+            prompt = ""
+            if TORCH_AVAILABLE:
+                status_text.text("🎨 Now generating image...")
+                progress_bar.progress(0.4)  # 40%
+                img, prompt = generate_pokemon_image_free(user_input, lambda p, m: update_progress(40 + p*0.6, m))
+            else:
+                status_text.text("🎨 Skipping image generation (not available)...")
+                progress_bar.progress(0.9)  # 90%
+                prompt = "Image generation not available in lightweight deployment mode"
             
             # Final progress update
             progress_bar.progress(1.0)  # 100% completion
-            status_text.text("Your complete Pokémon is ready!")
+            status_text.text("Your Pokémon is ready!")
             
             # Small delay to show completion
-            import time
             time.sleep(0.5)
             
             # Clear progress indicators
@@ -685,16 +749,16 @@ with tab1:
             status_text.empty()
             
             if img:
-                # Display complete Pokémon
-                st.success(f"Meet your new Pokémon: **{profile['name']}**!")
+                # Display complete Pokémon with image
+                st.success(f"🎉 Meet your new Pokémon: **{profile['name']}**!")
                 
                 # Show image first
                 st.image(img, caption=f"{profile['name']} - Your Generated Pokémon", use_container_width=True)
                 
                 # Show profile below image
-                st.subheader(f"{profile['name']} Profile")
-                st.write(f"**Suggested Type:** {profile['type_suggestion']}")
-                st.write(f"**Specialty:** {profile['stats_summary']}")
+                st.subheader(f"⚡ {profile['name']} Profile")
+                st.write(f"**🏷️ Suggested Type:** {profile['type_suggestion']}")
+                st.write(f"**💪 Specialty:** {profile['stats_summary']}")
                     
                 
                 # Expandable prompt details
@@ -705,13 +769,17 @@ with tab1:
                     if 'error' in profile:
                         st.warning(f"Text generation note: {profile['error']}")
             else:
-                st.error(f"Image generation failed: {prompt}")
-                # Still show the profile even if image failed
-                st.success(f"But here's your Pokémon profile: **{profile['name']}**!")
+                # Display profile without image
+                st.success(f"🎉 Meet your new Pokémon: **{profile['name']}**!")
                 
+                if not TORCH_AVAILABLE:
+                    st.info("🌐 **Cloud Mode**: Image generation not available in this deployment. Profile generated successfully!")
+                else:
+                    st.error(f"❌ Image generation failed: {prompt}")
 
-                st.write(f"**Type:** {profile['type_suggestion']}")
-                st.write(f"**Specialty:** {profile['stats_summary']}")
+                st.subheader(f"⚡ {profile['name']} Profile")
+                st.write(f"**🏷️ Type:** {profile['type_suggestion']}")
+                st.write(f"**💪 Specialty:** {profile['stats_summary']}")
                 
                 # Show name generation details even when image fails
                 with st.expander("View Name Generation Details", expanded=False):
