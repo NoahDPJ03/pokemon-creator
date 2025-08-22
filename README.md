@@ -15,21 +15,6 @@ A machine learning-powered Pokemon creator that predicts stats and generates Pok
 - **AI Image Generation**: Stable Diffusion integration (code complete, available for local development)
 - **AI Text Generation**: DistilGPT-2 name generation (code complete, available for local development)
 
-## Deployment Challenges
-
-This project was developed with advanced AI features including:
-- Stable Diffusion for custom Pokemon artwork generation
-- DistilGPT-2 for AI-powered name creation
-- PyTorch and Transformers integration
-- GPU acceleration support
-
-However, when deploying to **Streamlit Community Cloud**, I encountered significant limitations:
-- Memory constraints preventing large AI model loading
-- GPU unavailability for Stable Diffusion inference
-- Frequent crashes and timeouts during AI generation
-
-**Solution**: The complete AI generation code is preserved in the codebase but commented out for deployment stability. The app focuses on the robust ML prediction system that works reliably in cloud environments.
-
 ## Technical Implementation
 
 ### Machine Learning Pipeline
