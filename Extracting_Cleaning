@@ -1,0 +1,74 @@
+import pandas as pd
+import requests
+import time
+
+def get_poke(poke_id):
+    url = f"https://pokeapi.co/api/v2/pokemon/{poke_id}"
+    response = requests.get(url)
+    
+    if response.status_code != 200:
+        raise ValueError(f"Error fetching data for Pokémon ID {poke_id}: {response.status_code}")
+    
+    data = response.json()
+    
+    poke_data = {
+        'id': data['id'],
+        'name': data['name'],
+        'height': data['height'],
+        'weight': data['weight'],
+        'base_experience': data['base_experience'],
+        'types': [t['type']['name'] for t in data['types']],
+        'abilities': [a['ability']['name'] for a in data['abilities']],
+        'stats': {s['stat']['name']: s['base_stat'] for s in data['stats']}
+    }
+
+    time.sleep(0.05)  # To avoid hitting the API rate limit
+    
+    return pd.DataFrame([poke_data])
+
+def get_total_pokemon_count():
+    url = "https://pokeapi.co/api/v2/pokemon?limit=1"
+    response = requests.get(url)
+    if response.status_code == 200:
+        data = response.json()
+        print(data)
+        return data["count"]  # <- total number of Pokémon
+    else:
+        raise RuntimeError("Failed to retrieve total count from API")
+
+df = []
+
+cont_errors = 0
+for id in range(1, get_total_pokemon_count() + 1):
+    if cont_errors >= 10:
+        print("Too many consecutive errors, stopping.")
+        break
+    try:
+        poke = get_poke(id)
+        print(poke)
+        df.append(poke)
+    except Exception as e:
+        print(f"Skipping ID {id} due to error: {e}")
+        cont_errors += 1
+        print(f"Consecutive errors: {cont_errors}")
+        continue 
+    
+
+df = pd.concat(df, ignore_index=True)
+
+df.to_csv("pokemon_data.csv", index=False)
+
+# Converting 'stats' column from string representation of dicts to separate columns
+stats_list = pd.json_normalize(df['stats'].apply(eval))
+df = pd.concat([df.drop(columns=['stats']), stats_list], axis=1)
+
+# making columns into lists
+df = pd.concat([df.drop(columns=['types']), df['types'].apply(pd.Series)], axis=1)
+df = df.rename(columns={0: "type_list"})
+df = pd.concat([df.drop(columns=['abilities']), df['abilities'].apply(pd.Series)], axis=1)
+df = df.rename(columns={0: "ability_list"})
+
+# dropping unneeded columns
+df.drop(columns=["id"], inplace=True)
+
+df.to_csv("pokemon_data_cleaned.csv", index=False)
