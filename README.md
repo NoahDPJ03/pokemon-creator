@@ -11,7 +11,7 @@ Create your own custom Pokemon with ML-predicted stats, AI-generated images, and
 
 ## 🚀 Try It Live
 
-Visit the live app: [Your App URL Here]
+Visit the live app: [Coming Soon - Deploy to Streamlit Cloud]
 
 ## 🛠️ Tech Stack
 
@@ -25,7 +25,7 @@ Visit the live app: [Your App URL Here]
 
 1. Clone the repository:
 ```bash
-git clone [your-repo-url]
+git clone https://github.com/NoahDPJ03/pokemon-creator.git
 cd pokemon-creator
 ```
 
