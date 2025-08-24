@@ -1,6 +1,6 @@
 # Pokemon Creator - WORK IN PROGRESS
 
-A machine learning-powered Pokemon creator that predicts stats and generates Pokemon. This creator wouldn't have been possible without the data pipeline made from the data provided by [PokéAPI](https://pokeapi.co/).
+A machine learning-powered Pokemon creator that predicts stats and generates Pokemon. This creator wouldn't have been possible without the data pipeline made for the data provided by [PokéAPI](https://pokeapi.co/).
 
 ## Project Status
 
