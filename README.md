@@ -60,6 +60,7 @@ This project demonstrates:
 - **Web Development**: Creating interactive data science applications with Streamlit
 - **Deployment Strategy**: Adapting complex AI applications for cloud hosting constraints
 - **Code Preservation**: Maintaining complete feature implementations for portfolio purposes
+- **Data Pipelines**: Built a custom ETL pipeline using GET requests to extract data from the PokeAPI, transform JSON responses into structured Pandas DataFrames, and load them into a predictive modeling workflow.
 
 ### What I Learned About Deployment
 
