@@ -444,7 +444,9 @@ def generate_pokemon_image_free(user_input, progress_callback=None):
     else:
         speed_traits = "steady and deliberate with grounded, stable appearance"
         speed_features = "sturdy base, grounded stance"
-    
+
+    ##### Physical features
+
     # HP-based vitality
     if hp > 150:
         vitality = "incredibly robust and overflowing with life energy"
